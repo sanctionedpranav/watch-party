@@ -1,0 +1,23 @@
+# Render Blueprint - deploys the backend (Express + Socket.IO) as one web service.
+# Render dashboard -> New -> Blueprint -> pick this repo.
+services:
+  - type: web
+    name: watch-party-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false # Optional: MongoDB Atlas URI. If omitted, runs in fast In-Memory mode!
+      - key: JWT_SECRET
+        generateValue: true # Render automatically generates a cryptographically secure random secret
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false # Your Vercel frontend URL, e.g. https://web3-task-nine.vercel.app (or * to allow all)
+
