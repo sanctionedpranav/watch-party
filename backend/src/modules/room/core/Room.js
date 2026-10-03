@@ -85,15 +85,30 @@ export class Room {
 
   /** Old host becomes moderator, new user becomes host */
   transferHost(newHostId) {
-    const oldHost = this.participants.get(this.hostId);
-    if (oldHost) this.assignRole(oldHost.userId, ROLES.MODERATOR);
-    else this.savedRoles.set(this.hostId, ROLES.MODERATOR);
+    const targetUserId = String(newHostId);
 
-    this.hostId = newHostId;
-    this.savedRoles.delete(newHostId);
-    const newHost = this.participants.get(newHostId);
-    newHost.role = ROLES.HOST;
-    return newHost;
+    // 1. Locate the current host participant
+    const oldHost =
+      [...this.participants.values()].find((p) => p.role === ROLES.HOST) ||
+      this.participants.get(this.hostId);
+
+    if (oldHost) {
+      oldHost.role = ROLES.MODERATOR;
+      this.savedRoles.set(oldHost.userId, ROLES.MODERATOR);
+    } else if (this.hostId) {
+      this.savedRoles.set(this.hostId, ROLES.MODERATOR);
+    }
+
+    // 2. Assign Host role to the new host
+    this.hostId = targetUserId;
+    this.savedRoles.set(targetUserId, ROLES.HOST);
+
+    const newHost = this.participants.get(targetUserId);
+    if (newHost) {
+      newHost.role = ROLES.HOST;
+    }
+
+    return newHost || { userId: targetUserId, username: 'Host', role: ROLES.HOST };
   }
 
   /** Host & moderators - they receive participant requests */

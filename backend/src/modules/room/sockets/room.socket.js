@@ -153,6 +153,7 @@ export const registerRoomHandlers = (io, socket) => {
       // 1) Full snapshot ONLY for the person joining
       socket.emit(EVENTS.ROOM_JOINED, {
         room: room.getInfo(),
+        me: me.toJSON(),
         participants,
         state: room.getSyncState(),
         pendingRequests: hasPermission(me.role, PERMISSIONS.APPROVE_REQUESTS) ? room.getPendingRequests() : [],
@@ -290,12 +291,30 @@ export const registerRoomHandlers = (io, socket) => {
       const newHost = room.transferHost(payload.userId);
       roomService.updateRoomHost(room.code, newHost.userId).catch((err) => logger.error(err));
 
+      const updatedParticipants = room.getParticipantsList();
+
       io.to(room.code).emit(EVENTS.HOST_TRANSFERRED, {
         userId: newHost.userId,
         username: newHost.username,
         previousHost: me.username,
-        participants: room.getParticipantsList(),
+        participants: updatedParticipants,
       });
+
+      // Also emit role_assigned for both participants so all UIs update instantly
+      io.to(room.code).emit(EVENTS.ROLE_ASSIGNED, {
+        userId: newHost.userId,
+        username: newHost.username,
+        role: ROLES.HOST,
+        participants: updatedParticipants,
+      });
+
+      io.to(room.code).emit(EVENTS.ROLE_ASSIGNED, {
+        userId: me.userId,
+        username: me.username,
+        role: ROLES.MODERATOR,
+        participants: updatedParticipants,
+      });
+
       // Both are now approvers (old host = moderator) -> give the new host the queue
       io.to(newHost.socketId).emit(EVENTS.PENDING_REQUESTS, room.getPendingRequests());
       return undefined;

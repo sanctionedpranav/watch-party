@@ -34,8 +34,21 @@ export const useRoomSocket = (roomCode) => {
   const [requests, setRequests] = useState([]);
   const [reactions, setReactions] = useState([]);
 
+  const [myId, setMyId] = useState(user?.id || user?._id || null);
+
   // "me" is derived from the participant list, so role changes update automatically
-  const me = useMemo(() => participants.find((p) => p.userId === user?.id), [participants, user]);
+  const me = useMemo(() => {
+    const targetId = myId || user?.id || user?._id;
+    if (targetId) {
+      const found = participants.find((p) => p.userId === targetId);
+      if (found) return found;
+    }
+    if (user?.username) {
+      const foundByName = participants.find((p) => p.username === user.username);
+      if (foundByName) return foundByName;
+    }
+    return null;
+  }, [participants, user, myId]);
 
   /**
    * Save the server state together with the LOCAL time we received it.
@@ -57,8 +70,9 @@ export const useRoomSocket = (roomCode) => {
 
     socket.on(EVENTS.ROOM_JOINED, (data) => {
       setRoom(data.room);
-      setParticipants(data.participants);
-      setRequests(data.pendingRequests);
+      setParticipants(data.participants || []);
+      if (data.me?.userId) setMyId(data.me.userId);
+      setRequests(data.pendingRequests || []);
       saveSyncState(data.state);
       setStatus('joined');
     });
@@ -84,17 +98,29 @@ export const useRoomSocket = (roomCode) => {
     socket.on(EVENTS.USER_LEFT, (data) => setParticipants(data.participants));
 
     socket.on(EVENTS.ROLE_ASSIGNED, (data) => {
-      setParticipants(data.participants);
-      if (data.userId === user.id) toast.success(`You are now a ${data.role}`);
+      setParticipants(data.participants || []);
+      const isTargetMe =
+        data.userId === myId ||
+        data.userId === user?.id ||
+        (user?.username && data.username === user.username);
+      if (isTargetMe) toast.success(`Your role updated: ${data.role}`);
     });
 
     socket.on(EVENTS.HOST_TRANSFERRED, (data) => {
-      setParticipants(data.participants);
-      setRoom((prev) => ({ ...prev, hostId: data.userId }));
-      toast(`${data.username} is the new host`, { icon: '👑' });
+      setParticipants(data.participants || []);
+      setRoom((prev) => (prev ? { ...prev, hostId: data.userId } : prev));
+      const isNewHost =
+        data.userId === myId ||
+        data.userId === user?.id ||
+        (user?.username && data.username === user.username);
+      if (isNewHost) {
+        toast.success('You are now the Host!', { icon: '👑' });
+      } else {
+        toast(`${data.username} is the new host`, { icon: '👑' });
+      }
     });
 
-    socket.on(EVENTS.PARTICIPANT_REMOVED, (data) => setParticipants(data.participants));
+    socket.on(EVENTS.PARTICIPANT_REMOVED, (data) => setParticipants(data.participants || []));
 
     socket.on(EVENTS.REMOVED_FROM_ROOM, ({ by }) => {
       toast.error(`${by} removed you from the room`);
@@ -111,7 +137,7 @@ export const useRoomSocket = (roomCode) => {
       setRequests((prev) => [...prev, request]);
       toast(`${request.username} wants to ${describeAction(request.type, request.payload)}`, { icon: '✋' });
     });
-    socket.on(EVENTS.PENDING_REQUESTS, (list) => setRequests(list));
+    socket.on(EVENTS.PENDING_REQUESTS, (list) => setRequests(list || []));
     socket.on(EVENTS.REQUEST_CLOSED, ({ requestId }) =>
       setRequests((prev) => prev.filter((r) => r.id !== requestId))
     );
@@ -130,7 +156,7 @@ export const useRoomSocket = (roomCode) => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomCode, token, user.id, user.username, navigate]);
+  }, [roomCode, token, user?.id, user?.username, navigate, myId]);
 
   const emit = useCallback((event, payload) => socketRef.current?.emit(event, payload), []);
 

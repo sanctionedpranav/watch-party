@@ -14,7 +14,7 @@ const ParticipantList = ({ participants, me, onAssignRole, onRemove, onTransferH
       <h2 className="panel-title">In the room ({participants.length})</h2>
       <ul className="participant-list">
         {participants.map((p) => {
-          const isMe = p.userId === me?.userId;
+          const isMe = p.userId === me?.userId || (me?.username && p.username === me?.username);
           const canManage = iAmHost && !isMe && p.role !== ROLES.HOST;
 
           return (
